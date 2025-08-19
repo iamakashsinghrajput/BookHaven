@@ -5,8 +5,7 @@ import connectDB from "../../../lib/mongodb";
 import UserActivity from "../../../models/UserActivity";
 import Book from "../../../models/Book";
 import User from "../../../models/User";
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import { put } from '@vercel/blob';
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,25 +55,15 @@ export async function POST(request: NextRequest) {
     // Create unique filename
     const timestamp = Date.now();
     const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = `${timestamp}_${originalName}`;
+    const fileName = `papers/${timestamp}_${originalName}`;
     
-    // Create upload directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'papers');
-    try {
-      await mkdir(uploadDir, { recursive: true });
-    } catch (error) {
-      // Directory might already exist
-    }
-
-    // Save file to local storage
-    const filePath = path.join(uploadDir, fileName);
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Upload file to Vercel Blob
+    const blob = await put(fileName, file, {
+      access: 'public',
+    });
     
-    await writeFile(filePath, buffer);
-    
-    // Create file URL
-    const fileUrl = `/uploads/papers/${fileName}`;
+    // Get the file URL from blob
+    const fileUrl = blob.url;
 
     // Create book record
     const newBook = new Book({

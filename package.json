@@ -11,6 +11,7 @@
   "dependencies": {
     "@types/mongoose": "^5.11.96",
     "@types/nodemailer": "^7.0.0",
+    "@vercel/blob": "^1.1.1",
     "bcryptjs": "^3.0.2",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.539.0",
