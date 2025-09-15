@@ -4,7 +4,7 @@ import { authOptions } from '../../../../../lib/auth';
 import { getAllPapers } from '../../../../data/questionPapers';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {

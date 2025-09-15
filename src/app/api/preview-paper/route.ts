@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { getAllPapers, QuestionPaper } from '../../data/questionPapers';
 import connectDB from '../../../lib/mongodb';
-import UserActivity from '../../../models/UserActivity';
+import UserActivity, { IUserActivityLean } from '../../../models/UserActivity';
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,12 +29,12 @@ export async function POST(req: NextRequest) {
 
     if (typeof paperId === 'string' && paperId.match(/^[0-9a-fA-F]{24}$/)) {
       await connectDB();
-      const activity = await UserActivity.findById(paperId).lean();
+      const activity = await UserActivity.findById(paperId);
       if (activity) {
         paper = {
           id: activity._id.toString(),
           title: activity.title,
-          category: activity.category as any,
+          category: activity.category as QuestionPaper['category'],
           subCategory: activity.tags?.find((tag: string) => ['jee', 'neet', 'class12', 'class10', 'upsc', 'cse', 'mech', 'btech', 'aiims'].includes(tag)) || 'other',
           year: parseInt(activity.tags?.find((tag: string) => /^\d{4}$/.test(tag)) || new Date().getFullYear().toString()),
           subject: activity.subject,
