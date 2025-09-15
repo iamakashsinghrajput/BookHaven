@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import PageHeader from '../components/PageHeader';
 import PageWrapper from '../components/PageWrapper';
@@ -8,8 +8,10 @@ import Footer from '../components/Footer';
 import UploadModal from '../components/UploadModal';
 import ManageModal from '../components/ManageModal';
 import DeletePaperDialog from '../components/DeletePaperDialog';
+import SecurePreviewModal from '../components/SecurePreviewModal';
 import { getAllPapers, QuestionPaper } from '../data/questionPapers';
-import { FileText, Download, Search, PlusCircle, Trash2 } from 'lucide-react';
+import { FileText, Download, Search, PlusCircle, Trash2, CreditCard, Eye } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // Define the structure for our filter options
 const filterOptions = {
@@ -50,6 +52,9 @@ const QuestionPapersPage = () => {
   const [paperToDelete, setPaperToDelete] = useState<QuestionPaper | null>(null);
   const [userPapers, setUserPapers] = useState<UserActivity[]>([]);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState<number | string | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [selectedPreviewPaper, setSelectedPreviewPaper] = useState<QuestionPaper | null>(null);
 
   interface UserActivity {
     _id: string;
@@ -174,6 +179,136 @@ const QuestionPapersPage = () => {
     setPaperToDelete(null);
   };
 
+  const handlePreview = (paper: QuestionPaper) => {
+    if (!session?.user?.email) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    // Don't allow preview for unavailable papers
+    if (paper.url === '#') {
+      return;
+    }
+
+    setSelectedPreviewPaper(paper);
+    setPreviewModalOpen(true);
+  };
+
+  const handlePaymentAndDownload = useCallback(async (paper: QuestionPaper) => {
+    if (!session?.user?.email) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    // Check if user is admin - provide direct download access
+    if ((session.user as any)?.userType === 'admin') {
+      try {
+        setProcessingPayment(paper.id);
+
+        const response = await fetch('/api/admin/direct-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paperId: paper.id,
+            paperType: 'static'
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Direct download for admin
+          if (data.downloadUrl && data.downloadUrl.startsWith('http')) {
+            window.open(data.downloadUrl, '_blank');
+          }
+          toast.success(`Admin Access: ${data.message}`);
+        } else {
+          throw new Error(data.error || 'Admin download failed');
+        }
+      } catch (error) {
+        console.error('Admin download error:', error);
+        toast.error('Failed to download paper. Please try again.');
+      } finally {
+        setProcessingPayment(null);
+      }
+      return;
+    }
+
+    // If paper URL is '#' or not available, don't allow payment
+    if (paper.url === '#') {
+      return;
+    }
+
+    setProcessingPayment(paper.id);
+
+    try {
+      // Create Razorpay order
+      const orderResponse = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paperId: paper.id,
+          paperTitle: paper.title,
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+
+      if (!orderData.success) {
+        throw new Error(orderData.error || 'Failed to create payment order');
+      }
+
+      // Initialize Razorpay payment
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: 'My Library App',
+        description: `Question Paper: ${paper.title}`,
+        order_id: orderData.order.id,
+        handler: function (response: any) {
+          // Redirect to confirmation page with payment details
+          const params = new URLSearchParams({
+            payment_id: response.razorpay_payment_id,
+            order_id: response.razorpay_order_id,
+            signature: response.razorpay_signature,
+          });
+          window.location.href = `/payment/confirmation?${params.toString()}`;
+        },
+        prefill: {
+          name: session.user.name || '',
+          email: session.user.email || '',
+        },
+        theme: {
+          color: '#3B82F6',
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error('Payment initialization error:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+    } finally {
+      setProcessingPayment(null);
+    }
+  }, [session]);
+
+  // Listen for payment trigger from preview modal
+  useEffect(() => {
+    const handleStartPayment = (event: CustomEvent) => {
+      const paper = event.detail.paper;
+      handlePaymentAndDownload(paper);
+    };
+
+    window.addEventListener('startPayment', handleStartPayment as EventListener);
+    return () => {
+      window.removeEventListener('startPayment', handleStartPayment as EventListener);
+    };
+  }, [handlePaymentAndDownload]);
+
   return (
     <>
       <PageWrapper>
@@ -183,19 +318,19 @@ const QuestionPapersPage = () => {
         />
 
       {/* Filter Section */}
-      <div className="bg-gray-50 py-8">
+      <div className="bg-gray-50 py-6 sm:py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-end">
             {/* Category Filter */}
             <div>
-              <label className="block font-semibold mb-2 text-black">Select Field</label>
+              <label className="block font-semibold mb-2 text-black text-sm sm:text-base">Select Field</label>
               <select
                 value={selectedCategory}
                 onChange={(e) => {
                   setSelectedCategory(e.target.value);
                   setSelectedSubCategory(''); // Reset subcategory when field changes
                 }}
-                className="w-full p-3 pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left"
+                className="w-full p-2 sm:p-3 pl-6 sm:pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left text-sm sm:text-base"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
                   backgroundPosition: '8px center',
@@ -212,11 +347,11 @@ const QuestionPapersPage = () => {
 
             {/* Sub-category Filter */}
             <div>
-              <label className="block font-semibold mb-2 text-black">Select Branch / Class</label>
+              <label className="block font-semibold mb-2 text-black text-sm sm:text-base">Select Branch / Class</label>
               <select
                 value={selectedSubCategory}
                 onChange={(e) => setSelectedSubCategory(e.target.value)}
-                className="w-full p-3 pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left"
+                className="w-full p-2 sm:p-3 pl-6 sm:pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left text-sm sm:text-base"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
                   backgroundPosition: '8px center',
@@ -233,11 +368,11 @@ const QuestionPapersPage = () => {
 
             {/* Year Filter */}
             <div>
-              <label className="block font-semibold mb-2 text-black">Select Year</label>
+              <label className="block font-semibold mb-2 text-black text-sm sm:text-base">Select Year</label>
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="w-full p-3 pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left"
+                className="w-full p-2 sm:p-3 pl-6 sm:pl-8 border border-gray-300 text-gray-600 rounded-md appearance-none bg-white bg-no-repeat bg-left text-sm sm:text-base"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
                   backgroundPosition: '8px center',
@@ -252,10 +387,12 @@ const QuestionPapersPage = () => {
             {/* Search Button */}
             <button
               onClick={handleSearch}
-              className="w-full flex items-center justify-center gap-2 p-3 bg-black text-white font-semibold rounded-md hover:bg-gray-800 transition-colors"
+              className="w-full flex items-center justify-center gap-2 p-2 sm:p-3 bg-black text-white font-semibold rounded-md hover:bg-gray-800 transition-colors text-sm sm:text-base"
             >
-              <Search size={20} />
-              Find Papers
+              <Search size={16} className="sm:hidden" />
+              <Search size={20} className="hidden sm:block" />
+              <span className="hidden sm:inline">Find Papers</span>
+              <span className="sm:hidden">Search</span>
             </button>
           </div>
         </div>
@@ -276,20 +413,20 @@ const QuestionPapersPage = () => {
       </div>
 
       {/* Results Section */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {filteredPapers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredPapers.map((paper) => (
-              <div key={`${paper.id}-${refreshKey}`} className="bg-white border rounded-lg p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                <div className="flex items-start gap-4">
-                  <FileText className="text-black flex-shrink-0 mt-1" size={24} />
+              <div key={`${paper.id}-${refreshKey}`} className="bg-white border rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <FileText className="text-black flex-shrink-0 mt-1" size={20} />
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-black">{paper.title}</h3>
-                    <p className="text-sm text-gray-500">{paper.subject} &bull; {paper.year}</p>
+                    <h3 className="text-base sm:text-lg font-bold text-black leading-tight">{paper.title}</h3>
+                    <p className="text-xs sm:text-sm text-gray-500">{paper.subject} &bull; {paper.year}</p>
                     {paper.isUserUploaded && (
                       <div className="mt-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
+                          <span className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full w-fit">
                             Community Upload
                           </span>
                           <span className="text-xs text-gray-400">
@@ -322,25 +459,78 @@ const QuestionPapersPage = () => {
                       Not Available
                     </button>
                   ) : (
-                    <a
-                      href={paper.url}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-100 text-gray-800 font-semibold rounded-md hover:bg-gray-200 transition-colors"
-                    >
-                      <Download size={16} />
-                      {paper.title.includes('Sample') ? 'Download Sample PDF' : 'Download PDF'}
-                    </a>
+                    <div className="mt-4 space-y-2">
+                      {/* Price and Download Button */}
+                      <div className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-md p-2">
+                        <span className="text-xs sm:text-sm font-semibold text-yellow-800">Price: ₹10</span>
+                        <span className="text-xs text-yellow-600">Per download</span>
+                      </div>
+
+                      {/* Preview Button */}
+                      <button
+                        onClick={() => handlePreview(paper)}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 sm:px-4 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
+                      >
+                        <Eye size={14} className="sm:hidden" />
+                        <Eye size={16} className="hidden sm:block" />
+                        <span className="hidden sm:inline">Preview (Free)</span>
+                        <span className="sm:hidden">Preview</span>
+                      </button>
+
+                      {/* Payment Button */}
+                      <button
+                        onClick={() => handlePaymentAndDownload(paper)}
+                        disabled={processingPayment === paper.id}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 sm:px-4 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                      >
+                        {processingPayment === paper.id ? (
+                          <>
+                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            {(session?.user as any)?.userType === 'admin' ? (
+                              <>
+                                <Download size={14} className="sm:hidden" />
+                                <Download size={16} className="hidden sm:block" />
+                                <span className="hidden sm:inline">Admin Download (Free)</span>
+                                <span className="sm:hidden">Admin Free</span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard size={14} className="sm:hidden" />
+                                <CreditCard size={16} className="hidden sm:block" />
+                                <span className="hidden sm:inline">Pay ₹10 & Download</span>
+                                <span className="sm:hidden">Pay ₹10</span>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )
                 ) : (
-                  <button
-                    onClick={() => setShowLoginPrompt(true)}
-                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 transition-colors"
-                  >
-                    <Download size={16} />
-                    Sign in to Download
-                  </button>
+                  <div className="mt-4 space-y-2">
+                    <button
+                      onClick={() => setShowLoginPrompt(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 sm:px-4 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
+                    >
+                      <Eye size={14} className="sm:hidden" />
+                      <Eye size={16} className="hidden sm:block" />
+                      <span className="hidden sm:inline">Sign in to Preview</span>
+                      <span className="sm:hidden">Sign in</span>
+                    </button>
+                    <button
+                      onClick={() => setShowLoginPrompt(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 sm:px-4 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600 transition-colors text-sm sm:text-base"
+                    >
+                      <CreditCard size={14} className="sm:hidden" />
+                      <CreditCard size={16} className="hidden sm:block" />
+                      <span className="hidden sm:inline">Sign in to Purchase</span>
+                      <span className="sm:hidden">Purchase</span>
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -357,16 +547,16 @@ const QuestionPapersPage = () => {
       
       {/* User Uploaded Papers Section */}
       {session?.user && userPapers.length > 0 && (
-        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 border-t">
-          <h2 className="text-2xl font-bold text-black mb-6">Your Uploaded Papers</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 border-t">
+          <h2 className="text-xl sm:text-2xl font-bold text-black mb-4 sm:mb-6">Your Uploaded Papers</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {userPapers.slice(0, 6).map((paper) => (
-              <div key={paper._id} className="bg-white border rounded-lg p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                <div className="flex items-start gap-4">
-                  <FileText className="text-black flex-shrink-0 mt-1" size={24} />
+              <div key={paper._id} className="bg-white border rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <FileText className="text-black flex-shrink-0 mt-1" size={20} />
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-black">{paper.title}</h3>
-                    <p className="text-sm text-gray-500">{paper.subject} • {paper.category}</p>
+                    <h3 className="text-base sm:text-lg font-bold text-black leading-tight">{paper.title}</h3>
+                    <p className="text-xs sm:text-sm text-gray-500">{paper.subject} • {paper.category}</p>
                     <div className="mt-2 flex items-center justify-between">
                       <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
                         Your Upload
@@ -386,10 +576,12 @@ const QuestionPapersPage = () => {
                     download
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-100 text-gray-800 font-semibold rounded-md hover:bg-gray-200 transition-colors"
+                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 sm:px-4 bg-gray-100 text-gray-800 font-semibold rounded-md hover:bg-gray-200 transition-colors text-sm sm:text-base"
                   >
-                    <Download size={16} />
-                    Download PDF
+                    <Download size={14} className="sm:hidden" />
+                    <Download size={16} className="hidden sm:block" />
+                    <span className="hidden sm:inline">Download PDF</span>
+                    <span className="sm:hidden">Download</span>
                   </a>
                 )}
               </div>
@@ -400,19 +592,24 @@ const QuestionPapersPage = () => {
 
       {/* Upload Button */}
       {session?.user ? (
-        <div className="fixed bottom-6 right-6 z-40">
+        <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-40">
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white border border-blue-600 font-semibold rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-blue-500 text-white border border-blue-600 font-semibold rounded-full shadow-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
           >
-            <PlusCircle size={20} />
-            Contribute Paper
+            <PlusCircle size={16} className="sm:hidden" />
+            <PlusCircle size={20} className="hidden sm:block" />
+            <span className="hidden sm:inline">Contribute Paper</span>
+            <span className="sm:hidden">Contribute</span>
           </button>
         </div>
       ) : (
-        <div className="fixed bottom-6 right-6 z-40">
-          <div className="bg-white border border-gray-300 rounded-full px-4 py-2 shadow-lg">
-            <p className="text-sm text-gray-600">Sign in to contribute papers</p>
+        <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-40">
+          <div className="bg-white border border-gray-300 rounded-full px-3 sm:px-4 py-2 shadow-lg">
+            <p className="text-xs sm:text-sm text-gray-600">
+              <span className="hidden sm:inline">Sign in to contribute papers</span>
+              <span className="sm:hidden">Sign in to contribute</span>
+            </p>
           </div>
         </div>
       )}
@@ -445,19 +642,19 @@ const QuestionPapersPage = () => {
       {/* Login Prompt Modal */}
       {showLoginPrompt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white/90 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl w-full max-w-md ring-1 ring-black/5">
-            <div className="p-6 text-center">
+          <div className="bg-white/90 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md ring-1 ring-black/5">
+            <div className="p-4 sm:p-6 text-center">
               <div className="mb-4">
-                <Download className="mx-auto text-blue-500 mb-4" size={48} />
-                <h3 className="text-xl font-bold text-gray-800 mb-2">Sign In Required</h3>
-                <p className="text-gray-600">
-                  Please sign in to your account to download question papers and access your personalized library.
+                <Download className="mx-auto text-blue-500 mb-4" size={36} />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">Sign In Required</h3>
+                <p className="text-sm sm:text-base text-gray-600">
+                  Please sign in to your account to preview and download question papers and access your personalized library.
                 </p>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowLoginPrompt(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -466,7 +663,7 @@ const QuestionPapersPage = () => {
                     setShowLoginPrompt(false);
                     window.location.href = '/signin';
                   }}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                  className="flex-1 px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm sm:text-base"
                 >
                   Sign In
                 </button>
@@ -474,6 +671,18 @@ const QuestionPapersPage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Secure Preview Modal */}
+      {selectedPreviewPaper && (
+        <SecurePreviewModal
+          isOpen={previewModalOpen}
+          onClose={() => {
+            setPreviewModalOpen(false);
+            setSelectedPreviewPaper(null);
+          }}
+          paper={selectedPreviewPaper}
+        />
       )}
       </PageWrapper>
       

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, ChevronRight, Menu, X, User, LogOut } from 'lucide-react';
+import { Search, ChevronRight, Menu, X, User, LogOut, Shield } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 
@@ -80,21 +80,43 @@ const Header = () => {
           <div className="flex items-center gap-x-4">
             {status === 'authenticated' ? (
               <div className="relative" ref={dropdownRef}>
-                <Image 
-                  src={"/Akashstudios.svg"} 
-                  alt={'User'} 
-                  width={40} 
-                  height={40} 
-                  className="rounded-full cursor-pointer"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                />
+                {session?.user?.image ? (
+                  <Image
+                    src={session.user.image}
+                    alt={session.user.name || 'User'}
+                    width={40}
+                    height={40}
+                    className="rounded-full cursor-pointer border-2 border-gray-200 hover:border-brand-blue transition-colors"
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  />
+                ) : (
+                  <div
+                    className="w-10 h-10 rounded-full bg-gray-200 border-2 border-gray-300 cursor-pointer hover:border-brand-blue transition-colors flex items-center justify-center"
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  >
+                    <User className="h-6 w-6 text-gray-600" />
+                  </div>
+                )}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-20">
+                    {(session?.user as any)?.userType === 'admin' && (
+                      <>
+                        <div className="px-4 py-2 text-xs font-semibold text-blue-600 bg-blue-50 border-b">
+                          <Shield className="inline mr-1" size={14} />
+                          ADMIN ACCESS
+                        </div>
+                        <Link href="/admin/dashboard" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          <Shield className="mr-2" size={16} />
+                          Admin Dashboard
+                        </Link>
+                        <div className="border-t border-gray-100 my-1"></div>
+                      </>
+                    )}
                     <Link href="/dashboard" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       <User className="mr-2" size={16} />
                       My Account
                     </Link>
-                    <button 
+                    <button
                       onClick={() => {
                         signOut({ callbackUrl: '/' });
                         setIsDropdownOpen(false);

@@ -1,29 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { FileText, Eye, Lock } from 'lucide-react';
-
-interface UploadedPaper {
-  id: string;
-  title: string;
-  subject: string;
-  category: string;
-  uploaderName: string;
-  uploadDate: string;
-  url: string;
-}
+import { FileText, Eye, Lock, CreditCard } from 'lucide-react';
+import SecurePreviewModal from './SecurePreviewModal';
+import { QuestionPaper } from '../data/questionPapers';
+import toast from 'react-hot-toast';
 
 const NewArrivals = () => {
   const { data: session } = useSession();
-  const [recentPapers, setRecentPapers] = useState<UploadedPaper[]>([]);
+  const [recentPapers, setRecentPapers] = useState<QuestionPaper[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [selectedPreviewPaper, setSelectedPreviewPaper] = useState<QuestionPaper | null>(null);
+  const [processingPayment, setProcessingPayment] = useState<string | number | null>(null);
 
-  const handlePreview = (paper: UploadedPaper) => {
-    if (paper.url && paper.url !== '#') {
-      window.open(paper.url, '_blank', 'noopener,noreferrer');
+  const handlePreview = (paper: QuestionPaper) => {
+    if (!session?.user) {
+      toast.error('Please sign in to preview papers.');
+      return;
     }
+    setSelectedPreviewPaper(paper);
+    setPreviewModalOpen(true);
   };
 
   useEffect(() => {
@@ -43,6 +42,82 @@ const NewArrivals = () => {
       setLoading(false);
     }
   };
+
+  const handlePaymentAndDownload = useCallback(async (paper: QuestionPaper) => {
+    if (!session?.user?.email) {
+      toast.error('Please sign in to download papers.');
+      return;
+    }
+
+    if (paper.url === '#') {
+      return;
+    }
+
+    setProcessingPayment(paper.id);
+
+    try {
+      const orderResponse = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paperId: paper.id,
+          paperTitle: paper.title,
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+
+      if (!orderData.success) {
+        throw new Error(orderData.error || 'Failed to create payment order');
+      }
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: 'My Library App',
+        description: `Question Paper: ${paper.title}`,
+        order_id: orderData.order.id,
+        handler: function (response: any) {
+          const params = new URLSearchParams({
+            payment_id: response.razorpay_payment_id,
+            order_id: response.razorpay_order_id,
+            signature: response.razorpay_signature,
+          });
+          window.location.href = `/payment/confirmation?${params.toString()}`;
+        },
+        prefill: {
+          name: session.user.name || '',
+          email: session.user.email || '',
+        },
+        theme: {
+          color: '#3B82F6',
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error('Payment initialization error:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+    } finally {
+      setProcessingPayment(null);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const handleStartPayment = (event: CustomEvent) => {
+      const paper = event.detail.paper;
+      handlePaymentAndDownload(paper);
+    };
+
+    window.addEventListener('startPayment', handleStartPayment as EventListener);
+    return () => {
+      window.removeEventListener('startPayment', handleStartPayment as EventListener);
+    };
+  }, [handlePaymentAndDownload]);
 
   if (loading) {
     return (
@@ -76,7 +151,6 @@ const NewArrivals = () => {
                     </span>
                   </div>
                   
-                  {/* Preview Button - Only visible to logged-in users */}
                   {session?.user ? (
                     <button
                       onClick={() => handlePreview(paper)}
@@ -99,7 +173,6 @@ const NewArrivals = () => {
                 <p className="text-gray-500 text-xs">by {paper.uploaderName}</p>
                 <p className="text-gray-500 text-xs">{paper.uploadDate}</p>
                 
-                {/* Preview button below card for mobile */}
                 <div className="mt-3">
                   {session?.user ? (
                     <button
@@ -130,6 +203,16 @@ const NewArrivals = () => {
           </Link>
         </div>
       </div>
+      {selectedPreviewPaper && (
+        <SecurePreviewModal
+          isOpen={previewModalOpen}
+          onClose={() => {
+            setPreviewModalOpen(false);
+            setSelectedPreviewPaper(null);
+          }}
+          paper={selectedPreviewPaper}
+        />
+      )}
     </section>
   );
 };

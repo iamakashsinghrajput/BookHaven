@@ -29,9 +29,9 @@ const Footer = () => {
                     </div>
                     <div>
                         <h4 className="font-semibold text-white mb-4">Contact Us</h4>
-                        <p>123 Library Lane</p>
-                        <p>Bookville, BK 12345</p>
-                        <p className="mt-2">(555) 123-4567</p>
+                        <p>F-No: 187623</p>
+                        <p>VVIP Homes, Greater Noida</p>
+                        <p className="mt-2">9351 736629</p>
                     </div>
                     <div>
                         <h4 className="font-semibold text-white mb-4">Follow Us</h4>

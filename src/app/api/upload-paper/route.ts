@@ -5,6 +5,8 @@ import connectDB from "../../../lib/mongodb";
 import UserActivity from "../../../models/UserActivity";
 import Book from "../../../models/Book";
 import User from "../../../models/User";
+import UserReward from "../../../models/UserRewards";
+import { sendAdminUploadNotification, sendUserNotification } from "../../../lib/email";
 import { put } from '@vercel/blob';
 
 export async function POST(request: NextRequest) {
@@ -103,10 +105,40 @@ export async function POST(request: NextRequest) {
 
     await activity.save();
 
+    // Note: Reward will be created only after admin approval
+
+    // Send email notifications
+    try {
+      // Send notification to admin
+      await sendAdminUploadNotification({
+        userName: user.name || 'Anonymous',
+        userEmail: user.email,
+        paperTitle: title,
+        category,
+        subject,
+        uploadDate: new Date().toLocaleDateString()
+      });
+
+      // Send confirmation email to user
+      await sendUserNotification({
+        userName: user.name || 'Anonymous',
+        userEmail: user.email,
+        paperTitle: title,
+        status: 'uploaded'
+      });
+
+      console.log(`Email notifications sent for paper upload: ${title} by ${user.email}`);
+    } catch (emailError) {
+      console.error('Error sending email notifications:', emailError);
+      // Don't fail the upload if email fails, just log it
+    }
+
     return NextResponse.json({
-      message: "Paper uploaded successfully",
+      message: "Paper uploaded successfully! Admin notification sent. You'll receive ₹4 reward once approved.",
       bookId: newBook._id,
       fileUrl,
+      pendingApproval: true,
+      note: "Your paper is pending admin approval. You'll receive ₹4 reward once approved."
     }, { status: 201 });
 
   } catch (error) {

@@ -1,9 +1,9 @@
 export interface QuestionPaper {
-  id: number;
+  id: number | string;
   title: string;
   category: 'engineering' | 'medical' | 'school' | 'other';
   subCategory: string; // e.g., 'cse', 'neet', 'class12'
-  year: number;
+  year: number | string;
   subject: string;
   url: string; // Link to the PDF file
   isUserUploaded?: boolean;
@@ -86,7 +86,7 @@ export const allPapers: QuestionPaper[] = [
 
 // Function to add a new user-uploaded paper
 export const addUserUploadedPaper = (paper: Omit<QuestionPaper, 'id'>) => {
-  const newId = Math.max(...allPapers.map(p => p.id)) + 1;
+  const newId = Math.max(...allPapers.map(p => p.id as number)) + 1;
   const newPaper: QuestionPaper = {
     ...paper,
     id: newId,
@@ -130,4 +130,29 @@ export const deleteUserUploadedPaper = (paperId: number, userEmail: string) => {
   allPapers.splice(paperIndex, 1);
   
   return true;
+};
+
+// Function to update a user-uploaded paper
+export const updateUserUploadedPaper = (paperId: number, updates: Partial<QuestionPaper>, userEmail: string) => {
+  const paperIndex = allPapers.findIndex(p => p.id === paperId);
+  
+  if (paperIndex === -1) {
+    throw new Error('Paper not found');
+  }
+  
+  const paper = allPapers[paperIndex];
+  
+  // Only allow updates if it's a user-uploaded paper and the email matches
+  if (!paper.isUserUploaded) {
+    throw new Error('Cannot update official papers');
+  }
+  
+  if (paper.uploaderEmail !== userEmail) {
+    throw new Error('You can only update papers you uploaded');
+  }
+  
+  // Apply updates
+  allPapers[paperIndex] = { ...paper, ...updates };
+  
+  return allPapers[paperIndex];
 };

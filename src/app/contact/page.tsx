@@ -20,21 +20,21 @@ const ContactPage = () => {
               <MapPin className="text-black mt-1" size={24} />
               <div>
                 <h3 className="font-semibold text-black">Address</h3>
-                <p className="text-gray-600">123 Library Lane, Bookville, BK 12345</p>
+                <p className="text-gray-600">F-No: 187623, VVIP Homes, Greater Noida</p>
               </div>
             </div>
             <div className="flex items-start gap-4">
               <Phone className="text-black mt-1" size={24} />
               <div>
                 <h3 className="font-semibold text-black">Phone</h3>
-                <p className="text-gray-600">(555) 123-4567</p>
+                <p className="text-gray-600">9351 736629</p>
               </div>
             </div>
             <div className="flex items-start gap-4">
               <Mail className="text-black mt-1" size={24} />
               <div>
                 <h3 className="font-semibold text-black">Email</h3>
-                <p className="text-gray-600">hello@bookhaven.org</p>
+                <p className="text-gray-600">akash21052000singh@gmail.com</p>
               </div>
             </div>
             <h2 className="text-3xl font-bold text-black pt-6">Opening Hours</h2>
