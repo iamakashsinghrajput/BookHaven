@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
     const newPdfBytes = await newPdfDoc.save();
 
-    return new Response(newPdfBytes, {
+    return new Response(Buffer.from(newPdfBytes), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'inline; filename="preview.pdf"',
