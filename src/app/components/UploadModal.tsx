@@ -57,8 +57,8 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit
-        toast.error('File size must be less than 10MB');
+      if (selectedFile.size > 4 * 1024 * 1024) { // 4MB limit for Vercel compatibility
+        toast.error('File size must be less than 4MB');
         return;
       }
       if (!selectedFile.type.includes('pdf') && !selectedFile.type.includes('image')) {
@@ -204,7 +204,7 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
                 <p className="text-gray-600">
                   {file ? file.name : 'Click to select file or drag and drop'}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">PDF or Image files (max 10MB)</p>
+                <p className="text-sm text-gray-500 mt-1">PDF or Image files (max 4MB)</p>
               </label>
             </div>
           </div>

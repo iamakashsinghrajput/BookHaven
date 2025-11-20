@@ -10,6 +10,7 @@ import { sendAdminUploadNotification, sendUserNotification } from "../../../lib/
 import { put } from '@vercel/blob';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // 60 seconds timeout for file uploads
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,10 +34,12 @@ export async function POST(request: NextRequest) {
       return new NextResponse("No file provided", { status: 400 });
     }
 
-    // Validate file size (10MB limit)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    // Validate file size (4MB limit for Vercel deployment compatibility)
+    // Note: Vercel's Hobby plan has a 4.5MB body limit for API routes
+    // To support larger files, upgrade to Pro plan or use client-side uploads
+    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB in bytes
     if (file.size > MAX_FILE_SIZE) {
-      return new NextResponse("File size must be less than 10MB", { status: 400 });
+      return new NextResponse("File size must be less than 4MB", { status: 400 });
     }
 
     // Validate file type

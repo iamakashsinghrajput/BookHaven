@@ -6,7 +6,17 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
+      },
     ],
+  },
+  // Configure body size limit for Server Actions
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
   },
 };
 
