@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react';
 import { FaRupeeSign } from 'react-icons/fa';
 
@@ -89,8 +90,10 @@ const AdminDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedPaper, setSelectedPaper] = useState<UploadedPaper | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -213,6 +216,50 @@ const AdminDashboard = () => {
     await approvePaper(selectedPaper.id, false, rejectionReason);
     setSelectedPaper(null);
     setRejectionReason('');
+  };
+
+  const handleDelete = (paper: UploadedPaper) => {
+    setSelectedPaper(paper);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedPaper || isDeleting) return;
+
+    setIsDeleting(true);
+    const loadingToast = toast.loading('Deleting paper...');
+
+    try {
+      const response = await fetch('/api/admin/delete-paper', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId: selectedPaper.id })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(`Paper "${selectedPaper.title}" deleted successfully!`, {
+          id: loadingToast,
+          duration: 4000,
+          icon: '🗑️'
+        });
+        setShowDeleteModal(false);
+        setSelectedPaper(null);
+        fetchAdminData(); // Refresh data
+      } else {
+        toast.error(data.error || 'Failed to delete paper', {
+          id: loadingToast
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting paper:', error);
+      toast.error('Failed to delete paper', {
+        id: loadingToast
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const downloadPaper = (paper: UploadedPaper) => {
@@ -446,6 +493,15 @@ const AdminDashboard = () => {
                               <span className="hidden sm:inline">{paper.fileUrl ? 'Download' : 'No File'}</span>
                               <span className="sm:hidden">↓</span>
                             </button>
+                            <button
+                              onClick={() => handleDelete(paper)}
+                              className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-xs"
+                              title="Delete Paper"
+                            >
+                              <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
+                              <span className="hidden sm:inline">Delete</span>
+                              <span className="sm:hidden">🗑</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -564,18 +620,27 @@ const AdminDashboard = () => {
                   <p className="text-xs text-gray-400 mb-2">By: {paper.author} • {paper.category}</p>
                   <p className="text-xs text-gray-400 mb-3">↓ {paper.downloadCount} | 👁 {paper.viewCount}</p>
 
-                  <button
-                    onClick={() => downloadPaper(paper)}
-                    disabled={!paper.fileUrl}
-                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs sm:text-sm transition-colors ${
-                      !paper.fileUrl
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                    }`}
-                  >
-                    <Download className="h-3 sm:h-4 w-3 sm:w-4" />
-                    {!paper.fileUrl ? 'No File' : 'Download'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => downloadPaper(paper)}
+                      disabled={!paper.fileUrl}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs sm:text-sm transition-colors ${
+                        !paper.fileUrl
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      }`}
+                    >
+                      <Download className="h-3 sm:h-4 w-3 sm:w-4" />
+                      {!paper.fileUrl ? 'No File' : 'Download'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(paper)}
+                      className="flex items-center justify-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-xs sm:text-sm"
+                      title="Delete Paper"
+                    >
+                      <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -639,6 +704,61 @@ const AdminDashboard = () => {
               >
                 <XCircle className="h-4 w-4" />
                 Reject Paper
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedPaper && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600" />
+              <h3 className="text-lg font-bold text-gray-900">Delete Paper</h3>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-2">
+                Are you sure you want to delete this paper?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+                <p className="font-semibold text-red-900">{selectedPaper.title}</p>
+                <p className="text-sm text-red-700 mt-1">
+                  Uploaded by: {selectedPaper.uploadedBy.name} ({selectedPaper.uploadedBy.email})
+                </p>
+              </div>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <p className="text-sm text-yellow-800 font-medium">⚠️ Warning</p>
+                <ul className="text-xs text-yellow-700 mt-2 space-y-1 list-disc list-inside">
+                  <li>This will permanently delete the paper from the database</li>
+                  <li>The file will be removed from storage</li>
+                  <li>All associated rewards will be deleted</li>
+                  <li>User activity records will be removed</li>
+                  <li>This action cannot be undone</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedPaper(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>
