@@ -24,9 +24,17 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
+    // Prepare update object
+    const updateData: any = { status };
+
+    // If marking as paid, set the paidDate
+    if (status === 'paid') {
+      updateData.paidDate = new Date();
+    }
+
     const updatedReward = await UserReward.findByIdAndUpdate(
       rewardId,
-      { status },
+      updateData,
       { new: true }
     );
 

@@ -3,11 +3,13 @@ import mongoose from 'mongoose';
 interface IUserReward extends mongoose.Document {
   userEmail: string;
   userName: string;
+  userMobile?: string;
   paperTitle: string;
   paperId?: string;
   rewardAmount: number;
   uploadDate: Date;
   status: 'pending' | 'approved' | 'paid';
+  paidDate?: Date;
   notes?: string;
 }
 
@@ -22,6 +24,11 @@ const userRewardSchema = new mongoose.Schema<IUserReward>({
     type: String,
     required: true,
     trim: true
+  },
+  userMobile: {
+    type: String,
+    trim: true,
+    default: null
   },
   paperTitle: {
     type: String,
@@ -45,6 +52,10 @@ const userRewardSchema = new mongoose.Schema<IUserReward>({
     type: String,
     enum: ['pending', 'approved', 'paid'],
     default: 'approved'
+  },
+  paidDate: {
+    type: Date,
+    default: null
   },
   notes: {
     type: String,

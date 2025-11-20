@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
       rating: paper.rating,
       isPublic: paper.isPublic,
       isApproved: paper.isApproved,
+      status: paper.status || (paper.isApproved ? 'approved' : 'pending'),
+      rejectionReason: paper.rejectionReason || null,
       uploadDate: paper.createdAt.toISOString().split('T')[0],
       createdAt: paper.createdAt,
       updatedAt: paper.updatedAt

@@ -4,6 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password?: string;
+  mobile?: string;
   otp?: string;
   otpExpires?: Date;
   emailVerified?: Date;
@@ -31,6 +32,19 @@ const UserSchema = new Schema<IUser>({
     required: function() {
       return this.provider !== 'google';
     },
+  },
+  mobile: {
+    type: String,
+    trim: true,
+    default: null,
+    validate: {
+      validator: function(v: string) {
+        // Optional field, but if provided, must be valid Indian mobile number
+        if (!v) return true;
+        return /^[6-9]\d{9}$/.test(v);
+      },
+      message: 'Please enter a valid 10-digit mobile number'
+    }
   },
   otp: {
     type: String,

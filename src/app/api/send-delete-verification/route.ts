@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../../lib/mongodb";
 import UserActivity from "../../../models/UserActivity";
-import User from "../../../models/User";
 import VerificationCode from "../../../models/VerificationCode";
 import nodemailer from 'nodemailer';
 
@@ -15,7 +14,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail', // or your email service
   auth: {
     user: process.env.EMAIL_USER, // Your email
-    pass: process.env.EMAIL_PASS, // Your email password or app password
+    pass: process.env.EMAIL_PASSWORD, // Your email password or app password
   },
 });
 

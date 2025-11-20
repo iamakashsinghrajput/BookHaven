@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
+import toast from 'react-hot-toast';
 // Removed static import as we'll fetch from API
 import {
   Users,
@@ -55,6 +56,8 @@ interface UploadedPaper {
   };
   isPublic: boolean;
   isApproved: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
   uploadDate: string;
   createdAt: string;
   updatedAt: string;
@@ -85,6 +88,9 @@ const AdminDashboard = () => {
     uniqueUsers: 0
   });
   const [loading, setLoading] = useState(true);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedPaper, setSelectedPaper] = useState<UploadedPaper | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -162,26 +168,51 @@ const AdminDashboard = () => {
     }
   };
 
-  const approvePaper = async (paperId: string, approve: boolean) => {
+  const approvePaper = async (paperId: string, approve: boolean, reason?: string) => {
     try {
       const response = await fetch('/api/admin/approve-paper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paperId, approve })
+        body: JSON.stringify({ paperId, approve, rejectionReason: reason })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        alert(data.message);
+        if (approve) {
+          toast.success('Paper approved successfully! ₹4 reward credited.', {
+            duration: 4000,
+            icon: '✅'
+          });
+        } else {
+          toast.success('Paper rejected and user notified.', {
+            duration: 4000,
+            icon: '❌'
+          });
+        }
         fetchAdminData(); // Refresh data to show updated approval status and new rewards
       } else {
-        alert(data.error || 'Failed to update paper status');
+        toast.error(data.error || 'Failed to update paper status');
       }
     } catch (error) {
       console.error('Error approving paper:', error);
-      alert('Failed to update paper status');
+      toast.error('Failed to update paper status');
     }
+  };
+
+  const handleReject = (paper: UploadedPaper) => {
+    setSelectedPaper(paper);
+    setRejectionReason('');
+    setShowRejectModal(true);
+  };
+
+  const confirmReject = async () => {
+    if (!selectedPaper) return;
+
+    setShowRejectModal(false);
+    await approvePaper(selectedPaper.id, false, rejectionReason);
+    setSelectedPaper(null);
+    setRejectionReason('');
   };
 
   const downloadPaper = (paper: UploadedPaper) => {
@@ -338,7 +369,13 @@ const AdminDashboard = () => {
                             <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               {paper.category}
                             </span>
-                            {paper.isApproved ? (
+                            {paper.status === 'rejected' ? (
+                              <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                <span className="hidden sm:inline">Rejected</span>
+                                <span className="sm:hidden">Rejected</span>
+                              </span>
+                            ) : paper.isApproved || paper.status === 'approved' ? (
                               <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 <span className="hidden sm:inline">Approved (₹4 Rewarded)</span>
@@ -364,7 +401,19 @@ const AdminDashboard = () => {
                         </td>
                         <td className="py-3 px-2 sm:px-4">
                           <div className="flex gap-1 sm:gap-2 flex-wrap">
-                            {!paper.isApproved ? (
+                            {paper.status === 'rejected' ? (
+                              <span className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-red-100 text-red-700 rounded-md text-xs">
+                                <XCircle className="h-3 sm:h-4 w-3 sm:w-4" />
+                                <span className="hidden sm:inline">Rejected</span>
+                                <span className="sm:hidden">✗</span>
+                              </span>
+                            ) : paper.isApproved || paper.status === 'approved' ? (
+                              <span className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-gray-100 text-gray-500 rounded-md text-xs">
+                                <CheckCircle className="h-3 sm:h-4 w-3 sm:w-4" />
+                                <span className="hidden sm:inline">Already Approved</span>
+                                <span className="sm:hidden">✓</span>
+                              </span>
+                            ) : (
                               <>
                                 <button
                                   onClick={() => approvePaper(paper.id, true)}
@@ -375,7 +424,7 @@ const AdminDashboard = () => {
                                   <span className="sm:hidden">✓</span>
                                 </button>
                                 <button
-                                  onClick={() => approvePaper(paper.id, false)}
+                                  onClick={() => handleReject(paper)}
                                   className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-xs"
                                 >
                                   <XCircle className="h-3 sm:h-4 w-3 sm:w-4" />
@@ -383,12 +432,6 @@ const AdminDashboard = () => {
                                   <span className="sm:hidden">✗</span>
                                 </button>
                               </>
-                            ) : (
-                              <span className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-gray-100 text-gray-500 rounded-md text-xs">
-                                <CheckCircle className="h-3 sm:h-4 w-3 sm:w-4" />
-                                <span className="hidden sm:inline">Already Approved</span>
-                                <span className="sm:hidden">✓</span>
-                              </span>
                             )}
                             <button
                               onClick={() => downloadPaper(paper)}
@@ -546,6 +589,61 @@ const AdminDashboard = () => {
         </div>
       </div>
       <Footer />
+
+      {/* Rejection Modal */}
+      {showRejectModal && selectedPaper && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <XCircle className="h-6 w-6 text-red-600" />
+              <h3 className="text-lg font-bold text-gray-900">Reject Paper</h3>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                You are about to reject: <span className="font-semibold">{selectedPaper.title}</span>
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                The user will be notified via email with your rejection reason.
+              </p>
+
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rejection Reason (Optional)
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="e.g., Poor quality, incorrect format, duplicate content..."
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                rows={4}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                If left empty, a default message will be sent to the user.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setSelectedPaper(null);
+                  setRejectionReason('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReject}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Reject Paper
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

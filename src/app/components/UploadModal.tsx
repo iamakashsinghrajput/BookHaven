@@ -20,6 +20,7 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
     description: '',
     tags: '',
     examType: '',
+    mobile: '',
   });
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -77,8 +78,15 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
       return;
     }
 
-    if (!formData.title || !formData.subject || !formData.category) {
+    if (!formData.title || !formData.subject || !formData.category || !formData.mobile) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Validate mobile number format
+    const mobileRegex = /^[6-9]\d{9}$/;
+    if (!mobileRegex.test(formData.mobile)) {
+      toast.error('Please enter a valid 10-digit mobile number starting with 6-9');
       return;
     }
 
@@ -97,6 +105,7 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
       uploadFormData.append('description', formData.description);
       uploadFormData.append('examType', formData.examType);
       uploadFormData.append('tags', formData.tags);
+      uploadFormData.append('mobile', formData.mobile);
 
       const response = await fetch('/api/upload-paper', {
         method: 'POST',
@@ -111,8 +120,20 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
         resetForm();
         onClose();
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.message || 'Upload failed', {
+        // Try to parse error message from response
+        let errorMessage = 'Upload failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, try to get text
+          try {
+            errorMessage = await response.text() || errorMessage;
+          } catch (textError) {
+            // Use default error message
+          }
+        }
+        toast.error(errorMessage, {
           id: loadingToast,
         });
       }
@@ -136,6 +157,7 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
       description: '',
       tags: '',
       examType: '',
+      mobile: '',
     });
     setFile(null);
     setError('');
@@ -292,6 +314,27 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }: UploadModalProps) => 
               placeholder="e.g., Computer Science, Mechanical, Commerce"
               className="w-full px-3 py-2 border text-gray-500 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
             />
+          </div>
+
+          {/* Mobile Number */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mobile Number (for receiving rewards) *
+            </label>
+            <input
+              type="tel"
+              name="mobile"
+              value={formData.mobile}
+              onChange={handleInputChange}
+              placeholder="Enter 10-digit mobile number"
+              pattern="[6-9][0-9]{9}"
+              required
+              maxLength={10}
+              className="w-full px-3 py-2 border text-gray-500 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This number will be linked to your bank account for reward payments
+            </p>
           </div>
 
           {/* Tags */}

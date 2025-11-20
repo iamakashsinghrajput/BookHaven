@@ -14,11 +14,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
     }
 
-    const { paperId, approve } = await request.json();
+    const { paperId, approve, rejectionReason } = await request.json();
 
     if (!paperId || typeof approve !== 'boolean') {
       return NextResponse.json({ error: 'Paper ID and approval status required' }, { status: 400 });
     }
+
+    // rejectionReason is optional - we'll use a default if not provided
 
     await connectDB();
 
@@ -32,6 +34,8 @@ export async function POST(request: NextRequest) {
     if (approve) {
       // Approve the paper
       paper.isApproved = true;
+      paper.status = 'approved';
+      paper.rejectionReason = null; // Clear any previous rejection reason
       await paper.save();
 
       // Check if reward already exists for this paper
@@ -95,9 +99,17 @@ export async function POST(request: NextRequest) {
     } else {
       // Reject the paper
       paper.isApproved = false;
+      paper.status = 'rejected';
+      paper.rejectionReason = rejectionReason || 'Your paper did not meet our quality standards.';
       await paper.save();
 
-      console.log(`Admin rejected paper "${paper.title}" by ${paper.uploadedBy.email}`);
+      console.log(`Admin rejected paper "${paper.title}" by ${paper.uploadedBy.email}. Reason: ${rejectionReason}`);
+
+      // Delete any existing reward for this paper (if created)
+      const deletedReward = await UserReward.findOneAndDelete({ paperId: paperId });
+      if (deletedReward) {
+        console.log(`Deleted reward for rejected paper: ${paper.title}`);
+      }
 
       // Send rejection email to user
       try {
@@ -106,7 +118,7 @@ export async function POST(request: NextRequest) {
           userEmail: paper.uploadedBy.email,
           paperTitle: paper.title,
           status: 'rejected',
-          adminMessage: 'Your paper did not meet our quality standards. Please feel free to upload another paper.'
+          adminMessage: rejectionReason || 'Your paper did not meet our quality standards. Please feel free to upload another paper.'
         });
         console.log(`Rejection notification email sent to ${paper.uploadedBy.email}`);
       } catch (emailError) {
@@ -114,12 +126,14 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({
-        message: 'Paper rejected and user notified',
+        message: 'Paper rejected, reward deleted (if existed), and user notified',
         paper: {
           id: paper._id,
           title: paper.title,
           uploader: paper.uploadedBy.email,
-          isApproved: false
+          isApproved: false,
+          status: 'rejected',
+          rejectionReason: paper.rejectionReason
         }
       });
     }

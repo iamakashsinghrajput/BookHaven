@@ -26,9 +26,21 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return new NextResponse("No file provided", { status: 400 });
+    }
+
+    // Validate file size (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      return new NextResponse("File size must be less than 10MB", { status: 400 });
+    }
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      return new NextResponse("Only PDF and image files are allowed", { status: 400 });
     }
 
     // Get form fields
@@ -40,10 +52,23 @@ export async function POST(request: NextRequest) {
     const description = formData.get('description') as string;
     const examType = formData.get('examType') as string;
     const tagsString = formData.get('tags') as string;
+    const mobile = formData.get('mobile') as string;
 
     // Validate required fields
-    if (!title || !subject || !category) {
+    if (!title || !subject || !category || !mobile) {
       return new NextResponse("Missing required fields", { status: 400 });
+    }
+
+    // Validate mobile number format
+    const mobileRegex = /^[6-9]\d{9}$/;
+    if (!mobileRegex.test(mobile)) {
+      return new NextResponse("Please enter a valid 10-digit mobile number", { status: 400 });
+    }
+
+    // Update user's mobile number if not already set or if changed
+    if (user.mobile !== mobile) {
+      user.mobile = mobile;
+      await user.save();
     }
 
     // Process tags
@@ -105,7 +130,20 @@ export async function POST(request: NextRequest) {
 
     await activity.save();
 
-    // Note: Reward will be created only after admin approval
+    // Create reward entry for the user (₹4 per paper)
+    const reward = new UserReward({
+      userEmail: user.email,
+      userName: user.name || 'Anonymous',
+      userMobile: user.mobile || null,
+      paperTitle: title,
+      paperId: newBook._id.toString(),
+      rewardAmount: 4,
+      status: 'approved', // Set to approved after paper upload
+      uploadDate: new Date()
+    });
+
+    await reward.save();
+    console.log(`Reward created for ${user.email}: ₹4 for paper "${title}"`);
 
     // Send email notifications
     try {

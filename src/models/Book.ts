@@ -21,6 +21,8 @@ export interface IBook extends Document {
   };
   isPublic: boolean;
   isApproved: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -116,6 +118,17 @@ const BookSchema = new Schema<IBook>({
     type: Boolean,
     default: false,
     index: true,
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+    index: true,
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    default: null,
   },
 }, {
   timestamps: true,

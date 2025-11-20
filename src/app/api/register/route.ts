@@ -11,16 +11,21 @@ const transporter = nodemailer.createTransport({
   secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASSWORD,
   },
 });
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, mobile } = await request.json();
 
     if (!name || !email || !password) {
       return new NextResponse("Missing fields", { status: 400 });
+    }
+
+    // Validate mobile number if provided (optional)
+    if (mobile && !/^[6-9]\d{9}$/.test(mobile)) {
+      return new NextResponse("Invalid mobile number. Please enter a valid 10-digit Indian mobile number.", { status: 400 });
     }
 
     
@@ -44,6 +49,7 @@ export async function POST(request: Request) {
       name,
       email,
       password: hashedPassword,
+      mobile: mobile || null,
       otp,
       otpExpires,
       provider: 'credentials',

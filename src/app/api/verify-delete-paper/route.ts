@@ -64,14 +64,23 @@ export async function POST(request: Request) {
     }
 
     // Delete the physical file if it exists
+    // Note: Vercel Blob files are stored externally, not in /uploads/
+    // For Vercel Blob URLs, we would need to use the @vercel/blob delete API
+    // For now, we'll just delete local files if they exist
     if (paper.fileUrl && paper.fileUrl.startsWith('/uploads/')) {
       try {
         const filePath = path.join(process.cwd(), 'public', paper.fileUrl);
         await unlink(filePath);
+        console.log(`Deleted local file: ${filePath}`);
       } catch (fileError) {
-        console.error("Error deleting file:", fileError);
+        console.error("Error deleting local file:", fileError);
         // Continue with database deletion even if file deletion fails
       }
+    } else if (paper.fileUrl && paper.fileUrl.includes('blob.vercel-storage.com')) {
+      // TODO: For Vercel Blob storage, you would use: await del(paper.fileUrl)
+      // from @vercel/blob package. For now, we just log it.
+      console.log(`File is stored in Vercel Blob: ${paper.fileUrl}`);
+      console.log(`Note: Vercel Blob files persist but database record will be deleted`);
     }
 
     // Delete from Book collection if it exists

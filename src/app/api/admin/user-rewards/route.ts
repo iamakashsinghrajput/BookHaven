@@ -22,11 +22,13 @@ export async function GET(request: NextRequest) {
       _id: reward._id,
       userEmail: reward.userEmail,
       userName: reward.userName,
+      userMobile: reward.userMobile || 'Not provided',
       paperTitle: reward.paperTitle,
       paperId: reward.paperId,
       rewardAmount: reward.rewardAmount,
       uploadDate: reward.uploadDate.toISOString().split('T')[0],
       status: reward.status,
+      paidDate: reward.paidDate ? reward.paidDate.toISOString().split('T')[0] : null,
       notes: reward.notes
     }));
 

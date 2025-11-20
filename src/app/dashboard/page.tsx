@@ -7,8 +7,9 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import UploadModal from '../components/UploadModal';
 import ManageModal from '../components/ManageModal';
-import { Download, Upload, BookOpen, User, LogOut, PlusCircle, Star, TrendingUp } from 'lucide-react';
+import { Download, Upload, BookOpen, User, LogOut, PlusCircle, Star, TrendingUp, CheckCircle, Clock, XCircle } from 'lucide-react';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
 
 interface UserActivity {
   _id: string;
@@ -18,6 +19,9 @@ interface UserActivity {
   category: string;
   createdAt: string;
   fileUrl?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  isApproved?: boolean;
+  rejectionReason?: string;
   metadata?: {
     downloadCount?: number;
     rating?: number;
@@ -137,6 +141,26 @@ const DashboardPage = () => {
     setSelectedPaper(null);
   };
 
+  const showRejectionReason = (activity: UserActivity) => {
+    if (activity.rejectionReason) {
+      toast.error(
+        <div>
+          <p className="font-semibold mb-1">Paper Rejected</p>
+          <p className="text-sm">{activity.rejectionReason}</p>
+        </div>,
+        {
+          duration: 6000,
+          icon: '❌'
+        }
+      );
+    } else {
+      toast.error('Your paper did not meet our quality standards.', {
+        duration: 4000,
+        icon: '❌'
+      });
+    }
+  };
+
   // Show a loading state while the session is being fetched.
   if (status === 'loading' || loading) {
     return (
@@ -238,28 +262,58 @@ const DashboardPage = () => {
                 <ul className="space-y-4">
                   {uploads.length > 0 ? (
                     uploads.map(activity => (
-                      <li key={activity._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                        <div className="flex items-center">
-                          <Upload className="text-green-500 mr-4" size={20} />
-                          <div>
-                            <p className="font-medium text-gray-800">{activity.title}</p>
-                            <p className="text-sm text-gray-500">
-                              {activity.subject} &bull; {activity.category} &bull; Uploaded on {formatDate(activity.createdAt)}
-                            </p>
-                            {activity.metadata?.downloadCount && (
-                              <div className="flex items-center mt-1">
-                                <TrendingUp className="text-brand-blue w-4 h-4 mr-1" />
-                                <span className="text-sm text-gray-600">{activity.metadata.downloadCount} downloads</span>
-                              </div>
-                            )}
+                      <li key={activity._id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center flex-1">
+                            <Upload className="text-green-500 mr-4 flex-shrink-0" size={20} />
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-800">{activity.title}</p>
+                              <p className="text-sm text-gray-500">
+                                {activity.subject} &bull; {activity.category} &bull; Uploaded on {formatDate(activity.createdAt)}
+                              </p>
+                              {activity.metadata?.downloadCount !== undefined && activity.metadata.downloadCount > 0 && (
+                                <div className="flex items-center mt-1">
+                                  <TrendingUp className="text-brand-blue w-4 h-4 mr-1" />
+                                  <span className="text-sm text-gray-600">{activity.metadata.downloadCount} downloads</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
+                          <button
+                            onClick={() => handleManage(activity)}
+                            className="text-sm font-semibold text-black hover:underline ml-2 flex-shrink-0"
+                          >
+                            Manage
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => handleManage(activity)}
-                          className="text-sm font-semibold text-black hover:underline"
-                        >
-                          Manage
-                        </button>
+
+                        {/* Status Badge */}
+                        <div className="flex items-center gap-2 mt-2">
+                          {activity.status === 'rejected' ? (
+                            <>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Rejected
+                              </span>
+                              <button
+                                onClick={() => showRejectionReason(activity)}
+                                className="text-xs text-red-600 hover:text-red-800 underline"
+                              >
+                                View Reason
+                              </button>
+                            </>
+                          ) : activity.isApproved || activity.status === 'approved' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Approved (₹4 Rewarded)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <Clock className="h-3 w-3 mr-1" />
+                              Pending Approval
+                            </span>
+                          )}
+                        </div>
                       </li>
                     ))
                   ) : (
