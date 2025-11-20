@@ -7,6 +7,8 @@ import { getAllPapers, QuestionPaper } from '../../data/questionPapers';
 import connectDB from '../../../lib/mongodb';
 import UserActivity, { IUserActivityLean } from '../../../models/UserActivity';
 
+export const dynamic = 'force-dynamic';
+
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID!,
   key_secret: process.env.RAZORPAY_KEY_SECRET!,

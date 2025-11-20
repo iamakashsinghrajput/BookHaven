@@ -6,6 +6,8 @@ import UserActivity from "../../../models/UserActivity";
 import Book from "../../../models/Book";
 import User from "../../../models/User";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);

@@ -5,6 +5,8 @@ import connectDB from '../../../../lib/mongodb';
 import Book from '../../../../models/Book';
 import User from '../../../../models/User';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

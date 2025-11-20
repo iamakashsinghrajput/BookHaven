@@ -9,6 +9,8 @@ import UserReward from "../../../models/UserRewards";
 import { sendAdminUploadNotification, sendUserNotification } from "../../../lib/email";
 import { put } from '@vercel/blob';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

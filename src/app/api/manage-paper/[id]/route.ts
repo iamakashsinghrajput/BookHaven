@@ -8,6 +8,8 @@ import User from "../../../../models/User";
 import { unlink } from 'fs/promises';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 // GET - Get specific paper details
 export async function GET(
   request: NextRequest,

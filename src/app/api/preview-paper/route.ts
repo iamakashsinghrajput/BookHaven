@@ -5,6 +5,8 @@ import { getAllPapers, QuestionPaper } from '../../data/questionPapers';
 import connectDB from '../../../lib/mongodb';
 import UserActivity, { IUserActivityLean } from '../../../models/UserActivity';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

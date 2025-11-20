@@ -5,6 +5,8 @@ import connectDB from "../../../lib/mongodb";
 import UserActivity from "../../../models/UserActivity";
 import User from "../../../models/User";
 
+export const dynamic = 'force-dynamic';
+
 // GET - Fetch user's activities
 export async function GET(request: Request) {
   try {
